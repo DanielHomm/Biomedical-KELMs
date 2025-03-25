@@ -1,0 +1,11 @@
+wandb
+pymetis
+transformers[torch]==4.40.2
+adapters
+datasets
+evaluate
+numpy
+scipy
+pandas
+scikit-learn
+tqdm

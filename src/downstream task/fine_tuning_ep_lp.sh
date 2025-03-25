@@ -1,0 +1,360 @@
+#!/bin/bash
+
+# Global variables
+base_data_dir="../../data/"
+base_adapter_dir="../../adapters/"
+
+epochs=25
+batch_size_pubmedqa=12
+batch_size_bioasq=8
+batch_size_hoc=16
+batch_size_mednli=16
+batch_size_medqa=4 #12
+learning_rate=1e-5
+run_pubmedqa=10
+run_bioasq=10
+run_hoc=5
+run_mednli=3
+run_medqa=3
+learning_rate=1e-5
+seq_length=512
+warmup_proportion=0.1
+patient=5
+gradient_accumulation_steps=1
+
+
+
+# Array of argument sets
+# TASKS: BioASQ, PubMedQa, HoC, MedNLI, MedQA
+# BASe MODELS: dmis-lab/biobert-v1.1, allenai/scibert_scivocab_uncased, microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext
+# FINE TUNING STRATEGIES: model+adapters, only_model, fusion_only
+# Adapter Type: EP, EP_NB, LP, LP_NB, LP_FULL, LP_REL
+
+declare -a argument_sets=(
+#"microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext PubMedQa model+adapters EP_NB"
+#"microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext PubMedQa model+adapters LP_NB"
+#"microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext PubMedQa model+adapters LP_FULL"
+#"microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext PubMedQa model+adapters LP_REL"
+#"microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext PubMedQa only_model"
+
+#"microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext BioASQ model+adapters EP_NB"
+#"microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext BioASQ model+adapters LP_NB"
+#"microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext BioASQ model+adapters LP_FULL"
+#"microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext BioASQ model+adapters LP_REL"
+#"microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext BioASQ only_model"
+#"microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext HoC model+adapters EP_NB"
+#"microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext HoC model+adapters LP_NB"
+#"microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext HoC model+adapters LP_FULL"
+#"microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext HoC model+adapters LP_REL"
+#"microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext HoC only_model"
+
+#"microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext MedNLI model+adapters EP_NB"
+#"microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext MedNLI model+adapters LP_NB"
+#"microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext MedNLI model+adapters LP_FULL"
+#"microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext MedNLI model+adapters LP_REL"
+#"microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext MedNLI only_model"
+
+#"microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext MedQA model+adapters EP_NB"
+#"microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext MedQA model+adapters LP_NB"
+#"microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext MedQA model+adapters LP_FULL"
+#"microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext MedQA model+adapters LP_REL"
+#"microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext MedQA only_model"
+
+#"dmis-lab/biobert-v1.1 dmis-lab/biobert-v1.1 PubMedQa model+adapters EP_NB"
+#"dmis-lab/biobert-v1.1 dmis-lab/biobert-v1.1 PubMedQa model+adapters LP_NB"
+#"dmis-lab/biobert-v1.1 dmis-lab/biobert-v1.1 PubMedQa model+adapters LP_FULL"
+#"dmis-lab/biobert-v1.1 dmis-lab/biobert-v1.1 PubMedQa model+adapters LP_REL"
+#"dmis-lab/biobert-v1.1 dmis-lab/biobert-v1.1 PubMedQa only_model"
+
+#"dmis-lab/biobert-v1.1 dmis-lab/biobert-v1.1 BioASQ model+adapters EP_NB"
+#"dmis-lab/biobert-v1.1 dmis-lab/biobert-v1.1 BioASQ model+adapters LP_NB"
+#"dmis-lab/biobert-v1.1 dmis-lab/biobert-v1.1 BioASQ model+adapters LP_FULL"
+#"dmis-lab/biobert-v1.1 dmis-lab/biobert-v1.1 BioASQ model+adapters LP_REL"
+#"dmis-lab/biobert-v1.1 dmis-lab/biobert-v1.1 BioASQ only_model"
+
+#"dmis-lab/biobert-v1.1 dmis-lab/biobert-v1.1 HoC model+adapters EP_NB"
+#"dmis-lab/biobert-v1.1 dmis-lab/biobert-v1.1 HoC model+adapters LP_NB"
+#"dmis-lab/biobert-v1.1 dmis-lab/biobert-v1.1 HoC model+adapters LP_FULL"
+#"dmis-lab/biobert-v1.1 dmis-lab/biobert-v1.1 HoC model+adapters LP_REL"
+#"dmis-lab/biobert-v1.1 dmis-lab/biobert-v1.1 HoC only_model"
+
+#"dmis-lab/biobert-v1.1 dmis-lab/biobert-v1.1 MedNLI model+adapters EP_NB"
+#"dmis-lab/biobert-v1.1 dmis-lab/biobert-v1.1 MedNLI model+adapters LP_NB"
+#"dmis-lab/biobert-v1.1 dmis-lab/biobert-v1.1 MedNLI model+adapters LP_FULL"
+#"dmis-lab/biobert-v1.1 dmis-lab/biobert-v1.1 MedNLI model+adapters LP_REL"
+#"dmis-lab/biobert-v1.1 dmis-lab/biobert-v1.1 MedNLI only_model"
+
+#"dmis-lab/biobert-v1.1 dmis-lab/biobert-v1.1 MedQA model+adapters EP_NB"
+#"dmis-lab/biobert-v1.1 dmis-lab/biobert-v1.1 MedQA model+adapters LP_NB"
+#"dmis-lab/biobert-v1.1 dmis-lab/biobert-v1.1 MedQA model+adapters LP_FULL"
+#"dmis-lab/biobert-v1.1 dmis-lab/biobert-v1.1 MedQA model+adapters LP_REL"
+#"dmis-lab/biobert-v1.1 dmis-lab/biobert-v1.1 MedQA only_model"
+
+#"allenai/scibert_scivocab_uncased allenai/scibert_scivocab_uncased PubMedQa model+adapter EP_NB"
+#"allenai/scibert_scivocab_uncased allenai/scibert_scivocab_uncased PubMedQa model+adapter LP_NB"
+#"allenai/scibert_scivocab_uncased allenai/scibert_scivocab_uncased PubMedQa model+adapter LP_FULL"
+#"allenai/scibert_scivocab_uncased allenai/scibert_scivocab_uncased PubMedQa model+adapter LP_REL"
+#"allenai/scibert_scivocab_uncased allenai/scibert_scivocab_uncased PubMedQa only_model"
+
+#"allenai/scibert_scivocab_uncased allenai/scibert_scivocab_uncased BioASQ model+adapter EP_NB"
+#"allenai/scibert_scivocab_uncased allenai/scibert_scivocab_uncased BioASQ model+adapter LP_NB"
+#"allenai/scibert_scivocab_uncased allenai/scibert_scivocab_uncased BioASQ model+adapter LP_FULL"
+#"allenai/scibert_scivocab_uncased allenai/scibert_scivocab_uncased BioASQ model+adapter LP_REL"
+#"allenai/scibert_scivocab_uncased allenai/scibert_scivocab_uncased BioASQ only_model"
+
+#"allenai/scibert_scivocab_uncased allenai/scibert_scivocab_uncased HoC model+adapter EP_NB"
+#"allenai/scibert_scivocab_uncased allenai/scibert_scivocab_uncased HoC model+adapter LP_NB"
+#"allenai/scibert_scivocab_uncased allenai/scibert_scivocab_uncased HoC model+adapter LP_FULL"
+#"allenai/scibert_scivocab_uncased allenai/scibert_scivocab_uncased HoC model+adapter LP_REL"
+#"allenai/scibert_scivocab_uncased allenai/scibert_scivocab_uncased HoC only_model"
+
+#"allenai/scibert_scivocab_uncased allenai/scibert_scivocab_uncased MedNLI model+adapter EP_NB"
+#"allenai/scibert_scivocab_uncased allenai/scibert_scivocab_uncased MedNLI model+adapter LP_NB"
+#"allenai/scibert_scivocab_uncased allenai/scibert_scivocab_uncased MedNLI model+adapter LP_FULL"
+#"allenai/scibert_scivocab_uncased allenai/scibert_scivocab_uncased MedNLI model+adapter LP_REL"
+#"allenai/scibert_scivocab_uncased allenai/scibert_scivocab_uncased MedNLI only_model"
+
+#"allenai/scibert_scivocab_uncased allenai/scibert_scivocab_uncased MedQA model+adapter EP_NB"
+#"allenai/scibert_scivocab_uncased allenai/scibert_scivocab_uncased MedQA model+adapter LP_NB"
+#"allenai/scibert_scivocab_uncased allenai/scibert_scivocab_uncased MedQA model+adapter LP_FULL"
+#"allenai/scibert_scivocab_uncased allenai/scibert_scivocab_uncased MedQA model+adapter LP_REL"
+#"allenai/scibert_scivocab_uncased allenai/scibert_scivocab_uncased MedQA only_model"
+
+#"microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext PubMedQa model+adapters EP"
+#"microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext PubMedQa model+adapters LP"
+
+#"microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext BioASQ model+adapters EP"
+#"microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext BioASQ model+adapters LP"
+
+"microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext HoC model+adapters EP"
+"microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext HoC model+adapters LP"
+
+"microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext MedNLI model+adapters EP"
+"microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext MedNLI model+adapters LP"
+
+"microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext MedQA model+adapters EP"
+"microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext MedQA model+adapters LP"
+
+#"dmis-lab/biobert-v1.1 dmis-lab/biobert-v1.1 PubMedQa model+adapters EP"
+#"dmis-lab/biobert-v1.1 dmis-lab/biobert-v1.1 PubMedQa model+adapters LP"
+
+"dmis-lab/biobert-v1.1 dmis-lab/biobert-v1.1 BioASQ model+adapters EP"
+"dmis-lab/biobert-v1.1 dmis-lab/biobert-v1.1 BioASQ model+adapters LP"
+
+"dmis-lab/biobert-v1.1 dmis-lab/biobert-v1.1 HoC model+adapters EP"
+"dmis-lab/biobert-v1.1 dmis-lab/biobert-v1.1 HoC model+adapters LP"
+
+"dmis-lab/biobert-v1.1 dmis-lab/biobert-v1.1 MedNLI model+adapters EP"
+"dmis-lab/biobert-v1.1 dmis-lab/biobert-v1.1 MedNLI model+adapters LP"
+
+"dmis-lab/biobert-v1.1 dmis-lab/biobert-v1.1 MedQA model+adapters EP"
+"dmis-lab/biobert-v1.1 dmis-lab/biobert-v1.1 MedQA model+adapters LP"
+
+#"allenai/scibert_scivocab_uncased allenai/scibert_scivocab_uncased PubMedQa model+adapter EP"
+#"allenai/scibert_scivocab_uncased allenai/scibert_scivocab_uncased PubMedQa model+adapter LP"
+
+"allenai/scibert_scivocab_uncased allenai/scibert_scivocab_uncased BioASQ model+adapter EP"
+"allenai/scibert_scivocab_uncased allenai/scibert_scivocab_uncased BioASQ model+adapter LP"
+
+"allenai/scibert_scivocab_uncased allenai/scibert_scivocab_uncased HoC model+adapter EP"
+"allenai/scibert_scivocab_uncased allenai/scibert_scivocab_uncased HoC model+adapter LP"
+
+"allenai/scibert_scivocab_uncased allenai/scibert_scivocab_uncased MedNLI model+adapter EP"
+"allenai/scibert_scivocab_uncased allenai/scibert_scivocab_uncased MedNLI model+adapter LP"
+
+"allenai/scibert_scivocab_uncased allenai/scibert_scivocab_uncased MedQA model+adapter EP"
+"allenai/scibert_scivocab_uncased allenai/scibert_scivocab_uncased MedQA model+adapter LP"
+
+#"microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext PubMedQa only_fusion EP_NB"
+#"microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext PubMedQa only_fusion LP_NB"
+#"microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext PubMedQa only_fusion LP_FULL"
+#"microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext PubMedQa only_fusion LP_REL"
+#"microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext PubMedQa only_fusion EP"
+#"microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext PubMedQa only_fusion LP"
+
+#"microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext BioASQ only_fusion EP_NB"
+#"microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext BioASQ only_fusion LP_NB"
+#"microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext BioASQ only_fusion LP_FULL"
+#"microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext BioASQ only_fusion LP_REL"
+#"microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext BioASQ only_fusion EP"
+#"microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext BioASQ only_fusion LP"
+#
+#"microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext HoC only_fusion EP_NB"
+#"microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext HoC only_fusion LP_NB"
+#"microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext HoC only_fusion LP_FULL"
+#"microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext HoC only_fusion LP_REL"
+#"microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext HoC only_fusion EP"
+#"microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext HoC only_fusion LP"
+#
+#"microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext MedNLI only_fusion EP_NB"
+#"microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext MedNLI only_fusion LP_NB"
+#"microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext MedNLI only_fusion LP_FULL"
+#"microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext MedNLI only_fusion LP_REL"
+#"microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext MedNLI only_fusion EP"
+#"microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext MedNLI only_fusion LP"
+#
+#"microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext MedQA only_fusion EP_NB"
+#"microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext MedQA only_fusion LP_NB"
+#"microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext MedQA only_fusion LP_FULL"
+#"microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext MedQA only_fusion LP_REL"
+#"microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext MedQA only_fusion EP"
+#"microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext MedQA only_fusion LP"
+#
+#"dmis-lab/biobert-v1.1 dmis-lab/biobert-v1.1 PubMedQa only_fusion EP_NB"
+#"dmis-lab/biobert-v1.1 dmis-lab/biobert-v1.1 PubMedQa only_fusion LP_NB"
+#"dmis-lab/biobert-v1.1 dmis-lab/biobert-v1.1 PubMedQa only_fusion LP_FULL"
+#"dmis-lab/biobert-v1.1 dmis-lab/biobert-v1.1 PubMedQa only_fusion LP_REL"
+#"dmis-lab/biobert-v1.1 dmis-lab/biobert-v1.1 PubMedQa only_fusion EP"
+#"dmis-lab/biobert-v1.1 dmis-lab/biobert-v1.1 PubMedQa only_fusion LP"
+#
+#"dmis-lab/biobert-v1.1 dmis-lab/biobert-v1.1 BioASQ only_fusion EP_NB"
+#"dmis-lab/biobert-v1.1 dmis-lab/biobert-v1.1 BioASQ only_fusion LP_NB"
+#"dmis-lab/biobert-v1.1 dmis-lab/biobert-v1.1 BioASQ only_fusion LP_FULL"
+#"dmis-lab/biobert-v1.1 dmis-lab/biobert-v1.1 BioASQ only_fusion LP_REL"
+#"dmis-lab/biobert-v1.1 dmis-lab/biobert-v1.1 BioASQ only_fusion EP"
+#"dmis-lab/biobert-v1.1 dmis-lab/biobert-v1.1 BioASQ only_fusion LP"
+#
+#"dmis-lab/biobert-v1.1 dmis-lab/biobert-v1.1 HoC only_fusion EP_NB"
+#"dmis-lab/biobert-v1.1 dmis-lab/biobert-v1.1 HoC only_fusion LP_NB"
+#"dmis-lab/biobert-v1.1 dmis-lab/biobert-v1.1 HoC only_fusion LP_FULL"
+#"dmis-lab/biobert-v1.1 dmis-lab/biobert-v1.1 HoC only_fusion LP_REL"
+#"dmis-lab/biobert-v1.1 dmis-lab/biobert-v1.1 HoC only_fusion EP"
+#"dmis-lab/biobert-v1.1 dmis-lab/biobert-v1.1 HoC only_fusion LP"
+#
+#"dmis-lab/biobert-v1.1 dmis-lab/biobert-v1.1 MedNLI only_fusion EP_NB"
+#"dmis-lab/biobert-v1.1 dmis-lab/biobert-v1.1 MedNLI only_fusion LP_NB"
+#"dmis-lab/biobert-v1.1 dmis-lab/biobert-v1.1 MedNLI only_fusion LP_FULL"
+#"dmis-lab/biobert-v1.1 dmis-lab/biobert-v1.1 MedNLI only_fusion LP_REL"
+#"dmis-lab/biobert-v1.1 dmis-lab/biobert-v1.1 MedNLI only_fusion EP"
+#"dmis-lab/biobert-v1.1 dmis-lab/biobert-v1.1 MedNLI only_fusion LP"
+#
+#"dmis-lab/biobert-v1.1 dmis-lab/biobert-v1.1 MedQA only_fusion EP_NB"
+#"dmis-lab/biobert-v1.1 dmis-lab/biobert-v1.1 MedQA only_fusion LP_NB"
+#"dmis-lab/biobert-v1.1 dmis-lab/biobert-v1.1 MedQA only_fusion LP_FULL"
+#"dmis-lab/biobert-v1.1 dmis-lab/biobert-v1.1 MedQA only_fusion LP_REL"
+#"dmis-lab/biobert-v1.1 dmis-lab/biobert-v1.1 MedQA only_fusion EP"
+#"dmis-lab/biobert-v1.1 dmis-lab/biobert-v1.1 MedQA only_fusion LP"
+#
+#"allenai/scibert_scivocab_uncased allenai/scibert_scivocab_uncased PubMedQa only_fusion EP_NB"
+#"allenai/scibert_scivocab_uncased allenai/scibert_scivocab_uncased PubMedQa only_fusion LP_NB"
+#"allenai/scibert_scivocab_uncased allenai/scibert_scivocab_uncased PubMedQa only_fusion LP_FULL"
+#"allenai/scibert_scivocab_uncased allenai/scibert_scivocab_uncased PubMedQa only_fusion LP_REL"
+#"allenai/scibert_scivocab_uncased allenai/scibert_scivocab_uncased PubMedQa only_fusion EP"
+#"allenai/scibert_scivocab_uncased allenai/scibert_scivocab_uncased PubMedQa only_fusion LP"
+#
+#"allenai/scibert_scivocab_uncased allenai/scibert_scivocab_uncased BioASQ only_fusion EP_NB"
+#"allenai/scibert_scivocab_uncased allenai/scibert_scivocab_uncased BioASQ only_fusion LP_NB"
+#"allenai/scibert_scivocab_uncased allenai/scibert_scivocab_uncased BioASQ only_fusion LP_FULL"
+#"allenai/scibert_scivocab_uncased allenai/scibert_scivocab_uncased BioASQ only_fusion LP_REL"
+#"allenai/scibert_scivocab_uncased allenai/scibert_scivocab_uncased BioASQ only_fusion EP"
+#"allenai/scibert_scivocab_uncased allenai/scibert_scivocab_uncased BioASQ only_fusion LP"
+#
+#"allenai/scibert_scivocab_uncased allenai/scibert_scivocab_uncased HoC only_fusion EP_NB"
+#"allenai/scibert_scivocab_uncased allenai/scibert_scivocab_uncased HoC only_fusion LP_NB"
+#"allenai/scibert_scivocab_uncased allenai/scibert_scivocab_uncased HoC only_fusion LP_FULL"
+#"allenai/scibert_scivocab_uncased allenai/scibert_scivocab_uncased HoC only_fusion LP_REL"
+#"allenai/scibert_scivocab_uncased allenai/scibert_scivocab_uncased HoC only_fusion EP"
+#"allenai/scibert_scivocab_uncased allenai/scibert_scivocab_uncased HoC only_fusion LP"
+#
+#"allenai/scibert_scivocab_uncased allenai/scibert_scivocab_uncased MedNLI only_fusion EP_NB"
+#"allenai/scibert_scivocab_uncased allenai/scibert_scivocab_uncased MedNLI only_fusion LP_NB"
+#"allenai/scibert_scivocab_uncased allenai/scibert_scivocab_uncased MedNLI only_fusion LP_FULL"
+#"allenai/scibert_scivocab_uncased allenai/scibert_scivocab_uncased MedNLI only_fusion LP_REL"
+#"allenai/scibert_scivocab_uncased allenai/scibert_scivocab_uncased MedNLI only_fusion EP"
+#"allenai/scibert_scivocab_uncased allenai/scibert_scivocab_uncased MedNLI only_fusion LP"
+#
+#"allenai/scibert_scivocab_uncased allenai/scibert_scivocab_uncased MedQA only_fusion EP_NB"
+#"allenai/scibert_scivocab_uncased allenai/scibert_scivocab_uncased MedQA only_fusion LP_NB"
+#"allenai/scibert_scivocab_uncased allenai/scibert_scivocab_uncased MedQA only_fusion LP_FULL"
+#"allenai/scibert_scivocab_uncased allenai/scibert_scivocab_uncased MedQA only_fusion LP_REL"
+#"allenai/scibert_scivocab_uncased allenai/scibert_scivocab_uncased MedQA only_fusion EP"
+#"allenai/scibert_scivocab_uncased allenai/scibert_scivocab_uncased MedQA only_fusion LP"
+)
+
+# Loop over the argument sets and execute the Python script with each set of arguments
+for args in "${argument_sets[@]}"; do
+    # Convert the string of arguments into an array
+    IFS=' ' read -r -a arg_array <<< "$args"
+
+    # Set the adapter directory based on the base model
+    if [[ "${arg_array[0]}" == *"biobert"* ]]; then
+        adapter_dir="${base_adapter_dir}BioBERT/S20Rel_"
+    elif [[ "${arg_array[0]}" == *"scibert"* ]]; then
+        adapter_dir="${base_adapter_dir}SciBERT/S20Rel_"
+    # Add more base models here if needed
+    elif [[ "${arg_array[0]}" == *"BiomedBERT"* ]]; then
+        adapter_dir="${base_adapter_dir}PubMedBERT/S20Rel_"
+    else
+        echo "Unknown base model: ${arg_array[0]}"
+        exit 0
+    fi
+
+    # Set the data directory, batch_size and run based on the task
+    case_arg=$(echo "${arg_array[2]}" | tr '[:upper:]' '[:lower:]')
+
+    case "${case_arg}" in
+        "bioasq")
+            data_dir="${base_data_dir}BioASQ/"
+            batch_size=$batch_size_bioasq
+            runs=$run_bioasq
+            ;;
+        "pubmedqa")
+            data_dir="${base_data_dir}PubMedQa/"
+            batch_size=$batch_size_pubmedqa
+            runs=$run_pubmedqa
+            ;;
+        "hoc")
+            data_dir="${base_data_dir}HoC/"
+            batch_size=$batch_size_hoc
+            runs=$run_hoc
+            ;;
+        "mednli")
+            data_dir="${base_data_dir}mednli/"
+            batch_size=$batch_size_mednli
+            runs=$run_mednli
+            ;;
+        "medqa")
+            data_dir="${base_data_dir}medqa/"
+            batch_size=$batch_size_medqa
+            runs=$run_medqa
+            ;;
+        *)
+            echo "Unknown: ${arg_array[2]}"
+            exit 1
+            ;;
+    esac
+
+    # Construct the command with the global variables and the current set of arguments
+    command=("python" "fine_tuning_3_all.py"
+        "--BASE_MODEL" "${arg_array[0]}"
+        "--TOKENIZER" "${arg_array[1]}"
+        "--task" "${arg_array[2]}"
+        "--fine_tuning_strategy" "${arg_array[3]}"
+        "--data_dir" "$data_dir"
+        "--adapter_dir" "$adapter_dir"
+        "--lr" "$learning_rate"
+        "--batch_size" "$batch_size"
+        "--epochs" "$epochs"
+        "--runs" "$runs"
+        "--seq_length" "$seq_length"
+        "--warmup_proportion" "$warmup_proportion"
+        "--patient" "$patient"
+        "--gradient_accumulation_steps" "$gradient_accumulation_steps"
+    )
+    
+    # If adapter_name is empty, remove the argument
+    if [ -n "${arg_array[4]}" ]; then
+        command+=("--adapter_name" "${arg_array[4]}")
+    fi
+
+    # Print the command for debugging purposes
+    echo "Running command: ${command[@]}"
+
+    # Execute the command
+    "${command[@]}"
+
+    # Check the exit status of the command
+    if [ $? -ne 0 ]; then
+        echo "Error executing command: ${command[@]}!!!"
+    fi
+done

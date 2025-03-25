@@ -1,0 +1,4 @@
+
+*.log
+/src/downstream task/wandb
+/src/downstream task/training_output
