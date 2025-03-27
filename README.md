@@ -5,6 +5,8 @@ The project was conducted by Johannes Burmester, Mikhail Konov, and Daniel Homm
 The project mostly reuses the idea from Meng, Z., Liu, F., Clark, T. H., Shareghi, E., & Collier, N. (2021). Mixture-of-Partitions: Infusing large biomedical knowledge graphs into BERT.
 However, the here included code is compatible with adapterhub.
 
+A summary of our findings can be found in the poster.pdf.
+
 ## Biomedical KELMs
 
 This repository contains the practical course work of the summer semester 2024.
